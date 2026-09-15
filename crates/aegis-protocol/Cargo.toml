@@ -1,0 +1,19 @@
+[package]
+name = "aegis-protocol"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+url.workspace = true
+async-trait.workspace = true
+aegis-core = { workspace = true }
+
+[dev-dependencies]
+axum.workspace = true

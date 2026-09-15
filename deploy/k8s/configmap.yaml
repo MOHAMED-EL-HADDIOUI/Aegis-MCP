@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aegis-config
+  namespace: aegis-mcp
+  labels:
+    app.kubernetes.io/name: aegis-mcp
+data:
+  aegis.yaml: |
+    server:
+      mode: proxy
+    security:
+      fail_closed: true
+    policy:
+      path: /app/policy
+    taint:
+      enabled: true
+    classifier:
+      enabled: true
+      provider: heuristic
+    audit:
+      enabled: true
+      database: /data/aegis.db
+    sandbox:
+      enabled: false
+    network:
+      deny_metadata_endpoints: true
+    limits:
+      max_request_bytes: 10485760
+      request_timeout_ms: 5000

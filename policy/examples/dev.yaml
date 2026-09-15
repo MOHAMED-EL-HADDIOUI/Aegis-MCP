@@ -1,0 +1,7 @@
+version: "1"
+rules:
+  - name: allow-read-project
+    action: allow
+    when:
+      tool: filesystem_read
+      path_prefix: ./workspace

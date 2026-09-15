@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-mcp
+  namespace: aegis-mcp
+  labels:
+    app.kubernetes.io/name: aegis-mcp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aegis-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aegis-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: aegis-mcp
+          image: ghcr.io/aegis-mcp/aegis-mcp:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/config/aegis.yaml", "serve", "--bind", "0.0.0.0:8787"]
+          ports:
+            - name: http
+              containerPort: 8787
+          env:
+            - name: AEGIS_AUDIT_DB
+              value: /data/aegis.db
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8787
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8787
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: aegis-config
+        - name: data
+          emptyDir: {}

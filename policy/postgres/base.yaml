@@ -1,0 +1,17 @@
+version: "1"
+rules:
+  - name: deny-dangerous-sql
+    action: deny
+    when:
+      tool: postgres_query
+      sql_op: DROP
+  - name: approve-production-write
+    action: require_approval
+    when:
+      environment: production
+      operation: write
+  - name: allow-select
+    action: allow
+    when:
+      tool: postgres_query
+      sql_op: SELECT

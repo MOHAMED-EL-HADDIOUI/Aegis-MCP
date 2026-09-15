@@ -1,0 +1,30 @@
+[package]
+name = "aegis-proxy"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+blake3.workspace = true
+hex.workspace = true
+axum.workspace = true
+aegis-core = { workspace = true }
+aegis-config = { workspace = true }
+aegis-protocol = { workspace = true }
+aegis-policy = { workspace = true }
+aegis-taint = { workspace = true }
+aegis-security = { workspace = true }
+aegis-classifier = { workspace = true }
+aegis-audit = { workspace = true }
+aegis-sandbox = { workspace = true }
+aegis-observability = { workspace = true }
+
+[dev-dependencies]
+serde_yaml.workspace = true

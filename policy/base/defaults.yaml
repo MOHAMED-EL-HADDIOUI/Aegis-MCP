@@ -1,0 +1,11 @@
+version: "1"
+rules:
+  - name: deny-main-branch-push
+    action: deny
+    when:
+      tool: git_push
+      branch: main
+  - name: allow-echo
+    action: allow
+    when:
+      tool: echo

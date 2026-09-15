@@ -1,0 +1,13 @@
+target/
+.git/
+.github/
+dashboard/node_modules/
+dashboard/.next/
+deploy/
+docs/
+benchmarks/
+models/
+scripts/
+*.db
+*.db-wal
+*.db-shm

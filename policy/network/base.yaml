@@ -1,0 +1,16 @@
+version: "1"
+rules:
+  - name: block-private-file-exfiltration
+    action: deny
+    when:
+      taint: SECRET
+      destination: external_network
+  - name: block-untrusted-web-egress
+    action: deny
+    when:
+      taint: UNTRUSTED_WEB
+      destination: external_network
+  - name: warn-external-fetch
+    action: warn
+    when:
+      tool: http_fetch

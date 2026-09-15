@@ -1,0 +1,11 @@
+{"expected":"block","url":"http://169.254.169.254/latest/meta-data/"}
+{"expected":"block","url":"http://metadata.google.internal/"}
+{"expected":"block","url":"http://localhost:8080/admin"}
+{"expected":"block","url":"http://127.0.0.1:3000/"}
+{"expected":"block","url":"http://10.1.2.3:9000/metrics"}
+{"expected":"block","url":"http://10.0.0.5/internal"}
+{"expected":"block","url":"http://192.168.1.10/camera"}
+{"expected":"block","url":"http://172.16.0.2/db"}
+{"expected":"allow","url":"https://example.com/api/v1"}
+{"expected":"allow","url":"https://api.github.com/repos"}
+{"expected":"allow","url":"https://httpbin.org/post"}

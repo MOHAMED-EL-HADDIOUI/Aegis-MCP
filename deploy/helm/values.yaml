@@ -1,0 +1,36 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/aegis-mcp/aegis-mcp
+  tag: 0.1.0
+  pullPolicy: IfNotPresent
+
+# Mirrors the keys of the repository-root aegis.yaml.
+config:
+  serverMode: proxy
+  failClosed: true
+  policyPath: /app/policy
+  taintEnabled: true
+  classifierEnabled: true
+  classifierProvider: heuristic
+  auditEnabled: true
+  auditDatabase: /data/aegis.db
+  sandboxEnabled: false
+  denyMetadataEndpoints: true
+  maxRequestBytes: 10485760
+  requestTimeoutMs: 5000
+
+service:
+  type: ClusterIP
+  port: 8787
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+networkPolicy:
+  enabled: true

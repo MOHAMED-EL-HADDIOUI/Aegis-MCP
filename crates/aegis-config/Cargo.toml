@@ -1,0 +1,12 @@
+[package]
+name = "aegis-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+aegis-core = { workspace = true }

@@ -1,0 +1,10 @@
+version: "1"
+rules:
+  - name: deny-shell-exec-default
+    action: deny
+    when:
+      tool: shell_exec
+  - name: sandbox-shell-when-approved
+    action: sandbox
+    when:
+      tool: shell_sandbox

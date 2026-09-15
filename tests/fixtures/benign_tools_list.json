@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"tools":[{"description":"Read files from the project workspace directory.","input_schema":{"properties":{"path":{"type":"string"}},"type":"object"},"name":"workspace_read"},{"description":"Fetch a URL and return its text content.","input_schema":{"properties":{"url":{"type":"string"}},"type":"object"},"name":"web_fetch"}]}}

@@ -1,0 +1,15 @@
+{"expected":"block","path":"workspace/../../etc/passwd"}
+{"expected":"block","path":"../../../.ssh/id_rsa"}
+{"expected":"block","path":"./workspace/../../.ssh/id_rsa"}
+{"expected":"block","path":"C:\\Temp\\escape.txt"}
+{"expected":"block","path":"D:\\data\\secret.txt"}
+{"expected":"block","path":"C:\\Windows\\System32\\config\\SAM"}
+{"expected":"block","path":"~/.ssh/id_rsa"}
+{"expected":"block","path":"./workspace/.env"}
+{"expected":"block","path":"./workspace/.aws/credentials"}
+{"expected":"block","path":"./workspace/.git/config"}
+{"expected":"allow","path":"./workspace/src/main.rs"}
+{"expected":"allow","path":"./workspace/README.md"}
+{"expected":"allow","path":"./workspace/data/input.csv"}
+{"expected":"allow","path":"./workspace/notes/todo.txt"}
+{"expected":"allow","path":"./workspace/src/lib.rs"}

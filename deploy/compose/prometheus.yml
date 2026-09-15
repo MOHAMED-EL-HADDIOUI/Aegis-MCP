@@ -1,0 +1,24 @@
+# Prometheus scrape config for the Aegis-MCP gateway.
+#
+# The `serve` API exposes:
+#   GET /health          readiness/liveness signal ({"ok": true, "service": "aegis-mcp"})
+#   GET /metrics         Prometheus text exposition rendered by
+#                        aegis_observability::Observability::render_prometheus
+#                        (metrics: aegis_requests_total, aegis_blocks_total,
+#                         aegis_policy_latency, aegis_classifier_latency,
+#                         aegis_proxy_latency, aegis_taint_events_total)
+#   GET /api/events      JSON audit events ({"events": [...]})
+#   GET /api/incidents   JSON incidents ({"incidents": [...]})
+#   GET /api/approvals   JSON approvals ({"approvals": [...]})
+#
+# Prometheus scrapes /metrics below; the /api/* JSON endpoints are for the
+# dashboard, not for Prometheus.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: aegis
+    static_configs:
+      - targets: ["aegis:8787"]
+    metrics_path: /metrics

@@ -1,0 +1,13 @@
+Aegis-MCP is starting.
+
+Readiness: check the Service {{ include "aegis-mcp.fullname" . }} on port {{ .Values.service.port }} (/health).
+Serve API endpoints:
+  GET /health        {"ok": true, "service": "aegis-mcp"}
+  GET /metrics       Prometheus exposition (aegis_requests_total, aegis_blocks_total, ...)
+  GET /api/events    {"events": [...]}
+  GET /api/incidents {"incidents": [...]}
+  GET /api/approvals {"approvals": [...]}
+
+CLI management (approvals/incidents are read-only over HTTP):
+  aegis-mcp approvals approve <id>
+  aegis-mcp incidents set <id> RESOLVED

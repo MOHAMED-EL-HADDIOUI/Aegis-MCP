@@ -1,0 +1,34 @@
+[package]
+name = "aegis-fuzz"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "fuzz-protocol"
+path = "src/bin/fuzz_protocol.rs"
+
+[[bin]]
+name = "fuzz-security"
+path = "src/bin/fuzz_security.rs"
+
+[[bin]]
+name = "fuzz-policy"
+path = "src/bin/fuzz_policy.rs"
+
+[[bin]]
+name = "fuzz-config"
+path = "src/bin/fuzz_config.rs"
+
+[dependencies]
+serde_json.workspace = true
+serde_yaml.workspace = true
+anyhow.workspace = true
+once_cell.workspace = true
+aegis-protocol = { workspace = true }
+aegis-security = { workspace = true }
+aegis-policy = { workspace = true }
+aegis-config = { workspace = true }
+aegis-taint = { workspace = true }
+aegis-classifier = { workspace = true }
+aegis-observability = { workspace = true }
+aegis-core = { workspace = true }

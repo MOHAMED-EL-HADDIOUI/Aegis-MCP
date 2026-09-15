@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{"path":"./workspace/src/main.rs"},"name":"filesystem_read"}}

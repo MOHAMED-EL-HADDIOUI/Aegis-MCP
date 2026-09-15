@@ -1,0 +1,40 @@
+server:
+  mode: proxy
+security:
+  fail_closed: true
+policy:
+  path: ./policy
+  # Signed-bundle enforcement (fail-closed at startup). Distribute bundle.json
+  # + public key; keep the secret key offline. CLI:
+  #   aegis-mcp policy keygen
+  #   aegis-mcp policy sign --policy ./policy --key <secret-hex> --out bundle.json
+  #   aegis-mcp policy verify --bundle bundle.json --key <public-hex>
+  #   aegis-mcp serve --bundle ./bundle.json --public-key <public-hex> --require-signed-bundle
+  bundle: null
+  public_key: null
+  require_signed: false
+taint:
+  enabled: true
+classifier:
+  enabled: true
+  provider: heuristic
+audit:
+  enabled: true
+  database: ./aegis.db
+sandbox:
+  enabled: false
+observability:
+  # OpenTelemetry OTLP/HTTP export (W3C traceparent in, OTLP out).
+  # Metrics (Prometheus /metrics) and JSON tracing work regardless;
+  # this only controls OTLP export. Endpoint must be http:// (built-in
+  # exporter has no TLS deps); https:// fails export with a clear error.
+  otel_enabled: false
+  otlp_endpoint: null
+  service_name: aegis-mcp
+network:
+  deny_metadata_endpoints: true
+limits:
+  max_request_bytes: 10485760
+  request_timeout_ms: 5000
+  rate_limit_rps: 200.0
+  rate_limit_burst: 400

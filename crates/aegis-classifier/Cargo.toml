@@ -1,0 +1,26 @@
+[package]
+name = "aegis-classifier"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+chrono.workspace = true
+aegis-core = { workspace = true }
+
+[features]
+default = []
+onnx = ["dep:ort"]
+ 
+[dependencies.ort]
+version = "2.0.0-rc.13"
+optional = true
+features = ["download-binaries"]

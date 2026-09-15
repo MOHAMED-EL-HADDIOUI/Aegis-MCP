@@ -1,0 +1,34 @@
+[package]
+name = "aegis-cli"
+version.workspace = true
+edition.workspace = true
+default-run = "aegis-mcp"
+
+[[bin]]
+name = "aegis-mcp"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+shell-words.workspace = true
+axum.workspace = true
+aegis-core = { workspace = true }
+aegis-config = { workspace = true }
+aegis-protocol = { workspace = true }
+aegis-policy = { workspace = true }
+aegis-taint = { workspace = true }
+aegis-security = { workspace = true }
+aegis-classifier = { workspace = true }
+aegis-audit = { workspace = true }
+aegis-sandbox = { workspace = true }
+aegis-observability = { workspace = true }
+aegis-proxy = { workspace = true }

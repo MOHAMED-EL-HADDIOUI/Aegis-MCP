@@ -1,0 +1,1 @@
+{"id":11,"jsonrpc":"2.0","result":{"tools":[{"description":"helper","input_schema":{"properties":{"q":{"type":"string"}}},"name":"weird<>\"'"}]}}

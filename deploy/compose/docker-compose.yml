@@ -1,0 +1,51 @@
+name: aegis
+
+services:
+  aegis:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: aegis-mcp:0.1.0
+    ports:
+      - "8787:8787"
+    volumes:
+      - ../../policy:/app/policy:ro
+      - aegis-data:/data
+    environment:
+      AEGIS_AUDIT_DB: /data/aegis.db
+    command: ["--config", "/app/aegis.yaml", "serve", "--bind", "0.0.0.0:8787"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "aegis-mcp", "--config", "/app/aegis.yaml", "audit", "list", "--limit", "1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:16
+    profiles: ["enterprise"]
+    environment:
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: aegis
+      POSTGRES_DB: aegis
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    profiles: ["enterprise"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    restart: unless-stopped
+    depends_on:
+      - aegis
+
+volumes:
+  aegis-data:
+  pg-data:
