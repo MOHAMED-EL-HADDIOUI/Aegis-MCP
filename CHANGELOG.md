@@ -100,6 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker runtime defaults to `serve --bind 0.0.0.0:8787` so plain
   `docker run` is reachable (K8s already overrode the bind explicitly).
 - README workspace test count refreshed (93 tests green).
+- Docker builder `rust:1.75-bookworm` → `rust:bookworm`: the committed
+  `Cargo.lock` is lockfile v4 (needs Cargo >= 1.78), which the 1.75 builder
+  cannot parse. Workspace `rust-version` and README/CONTRIBUTING
+  prerequisites bumped 1.75 → 1.78 to match; deps stay pinned via the lock.
 
 ## [0.1.0] - 2026-09-14
 

@@ -92,7 +92,7 @@ Full model, attack trees, and residual risks:
 
 ## Quick start
 
-Prerequisites: Rust 1.75+, Node 20+ (dashboard). No other setup needed.
+Prerequisites: Rust 1.78+, Node 20+ (dashboard). No other setup needed.
 
 ```sh
 cargo build --workspace

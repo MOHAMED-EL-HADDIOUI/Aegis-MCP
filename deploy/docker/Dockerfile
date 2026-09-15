@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM rust:1.75-bookworm AS builder
+# Rolling stable (not pinned 1.75): Cargo.lock is lockfile v4, which needs
+# Cargo >= 1.78 to parse. Deps stay pinned via the committed Cargo.lock.
+FROM rust:bookworm AS builder
 
 WORKDIR /app
 

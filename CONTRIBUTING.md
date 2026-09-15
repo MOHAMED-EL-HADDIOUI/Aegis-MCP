@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Rust 1.75+** (workspace `rust-version`; verified with 1.98.1).
+- **Rust 1.78+** (workspace `rust-version`; verified with 1.98.1).
   Install via [rustup](https://rustup.rs/): `rustup update stable`.
 - **Node 20+** for the dashboard (`dashboard/`, Next.js). Verified with
   Node 24 / npm 12.
