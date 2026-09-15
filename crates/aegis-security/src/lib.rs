@@ -21,11 +21,17 @@ pub struct FsVerdict {
 }
 
 /// Canonicalize lexically (no FS touch) + enforce workspace containment.
+///
+/// Cross-platform: Windows absolute forms (`C:\…`, `C:/…`, UNC `\\…`, `~…`)
+/// are treated as absolute on **every** host OS. Attacker-controlled paths
+/// may use foreign syntax regardless of where the gateway runs, and `Path`
+/// on Linux does not recognize `C:` prefixes or backslash roots.
 pub fn inspect_filesystem(raw_path: &str, workspace: &str) -> FsVerdict {
     let normalized = lexical_normalize(raw_path);
     let ws_canon = lexical_normalize(workspace);
+    let is_abs = Path::new(&normalized).is_absolute() || is_foreign_absolute(raw_path);
     // absolute escape outside workspace
-    if Path::new(&normalized).is_absolute() && !under_workspace(&normalized, &ws_canon) {
+    if is_abs && !under_workspace(&normalized, &ws_canon) {
         // allowlist: still deny sensitive absolute paths
         return FsVerdict {
             allowed: false,
@@ -52,7 +58,7 @@ pub fn inspect_filesystem(raw_path: &str, workspace: &str) -> FsVerdict {
     }
     // workspace containment for relative paths (compare normalized forms;
     // callers may pass "./workspace" while normalization strips "./").
-    let joined = if Path::new(&normalized).is_absolute() {
+    let joined = if Path::new(&normalized).is_absolute() || is_foreign_absolute(raw_path) {
         normalized.clone()
     } else {
         format!(
@@ -79,6 +85,25 @@ pub fn inspect_filesystem(raw_path: &str, workspace: &str) -> FsVerdict {
 /// True when canonical `path` equals `ws` or lives beneath it.
 fn under_workspace(path: &str, ws: &str) -> bool {
     path == ws || path.starts_with(&format!("{}/", ws))
+}
+
+/// Windows/home absolute forms, recognized on every host OS (see
+/// `inspect_filesystem`): drive-letter (`C:\`, `C:/`, bare `C:`), UNC
+/// (`\\server\share`, `//server/share`), home (`~`, `~/…`), and Unix root
+/// (`/…`, which Windows `Path` does not report as absolute).
+fn is_foreign_absolute(raw: &str) -> bool {
+    let t = raw.trim_start();
+    if t.starts_with('~') || t.starts_with('/') {
+        return true;
+    }
+    if t.starts_with("\\\\") || t.starts_with("//") {
+        return true;
+    }
+    let b = t.as_bytes();
+    if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
+        return true;
+    }
+    false
 }
 
 fn lexical_normalize(p: &str) -> String {
@@ -425,6 +450,27 @@ mod tests {
     fn allows_project_file() {
         let v = inspect_filesystem("./workspace/src/main.rs", "./workspace");
         assert!(v.allowed);
+    }
+    #[test]
+    fn blocks_foreign_absolute_on_any_os() {
+        // Windows absolute forms must deny even when the gateway runs on
+        // Linux (and vice versa): attacker syntax is not host syntax.
+        for p in [
+            "C:\\Temp\\escape.txt",
+            "C:/Temp/escape.txt",
+            "D:\\data\\secret.txt",
+            "C:\\Windows\\System32\\config\\SAM",
+            "\\\\server\\share\\file.txt",
+            "//server/share/file.txt",
+            "~/.ssh/id_rsa",
+            "~/documents/notes.txt",
+            "/etc/passwd",
+        ] {
+            let v = inspect_filesystem(p, "./workspace");
+            assert!(!v.allowed, "expected BLOCK for {:?}", p);
+        }
+        // Relative project paths still pass.
+        assert!(inspect_filesystem("./workspace/a.txt", "./workspace").allowed);
     }
     #[test]
     fn detects_pipe_to_shell() {

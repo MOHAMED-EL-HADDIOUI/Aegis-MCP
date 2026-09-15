@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy path — fixes Windows hang, 3/3 green in ~0.1 s.
 - Docker runtime defaults to `serve --bind 0.0.0.0:8787` so plain
   `docker run` is reachable (K8s already overrode the bind explicitly).
-- README workspace test count refreshed (92 tests green).
+- README workspace test count refreshed (93 tests green).
 
 ## [0.1.0] - 2026-09-14
 

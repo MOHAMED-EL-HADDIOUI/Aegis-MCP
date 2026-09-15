@@ -96,7 +96,7 @@ Prerequisites: Rust 1.75+, Node 20+ (dashboard). No other setup needed.
 
 ```sh
 cargo build --workspace
-cargo test --workspace          # 92 tests green
+cargo test --workspace          # 93 tests green
 cargo run -p aegis-cli -- config validate
 cargo run -p aegis-cli -- policy validate --policy ./policy/filesystem/base.yaml
 cargo run -p aegis-cli -- benchmark --json
