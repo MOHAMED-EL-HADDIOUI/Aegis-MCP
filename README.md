@@ -300,7 +300,8 @@ approval-gated write:
 > *Aegis-MCP. The zero-trust runtime security layer for AI agents using MCP —
 > every tool call inspected, malicious input fails closed.*
 
-Click the poster to play `brag-output/brag.mp4`.
+▶️ **[Play the launch video (`brag-output/brag.mp4`, 22s)](brag-output/brag.mp4)** —
+click to watch it in GitHub's player (repo collaborators only).
 
 ## 📚 Docs
 
