@@ -1,0 +1,2 @@
+Aegis-MCP.
+The zero-trust runtime security layer for AI agents using MCP — every tool call inspected, malicious input fails closed.
