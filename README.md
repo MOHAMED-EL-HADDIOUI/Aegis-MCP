@@ -167,20 +167,21 @@ rules:
     when:
       tool: filesystem_read
       path_prefix: ./workspace
-  - name: deny-write-outside-workspace
-    action: deny
-    when:
-      tool: filesystem_write
   - name: approve-write-project
     action: require_approval
     when:
       tool: filesystem_write
       path_prefix: ./workspace
+  - name: deny-write-outside-workspace
+    action: deny
+    when:
+      tool: filesystem_write
 ```
 
 Condition keys: `tool`, `server`, `user`, `environment`, `branch`, `path`,
 `path_prefix`, `url`, `destination`, `http_method`, `sql_op`, `operation`,
-`taint`, `risk_gte`, `resource`, `argument.<field>`.
+`taint`, `risk_gte`, `rate`, `time` (`"HH:MM-HH:MM"` UTC window), `resource`,
+`argument.<field>`.
 Guide: [docs/policies/POLICY_GUIDE.md](docs/policies/POLICY_GUIDE.md).
 
 ## Attack demonstration
@@ -284,6 +285,28 @@ hashes), **incidents** (severity triage), **approvals** (live approve/deny queue
 approving mints an expiring grant that unblocks the identical call),
 **events**, **taint**, **settings**. Run the backend with `make serve`
 (`make dashboard` is an alias); point the frontend at `127.0.0.1:8787`.
+
+## Screenshots
+
+Genuine captures (headless Chrome, 1280×900) of the dashboard above talking
+to a live `serve` backend seeded with one benign read, one traversal, one
+injection, one secret-exfil, and one approval-gated write:
+
+| Overview | Tools |
+| -------- | ----- |
+| ![Overview: gateway UP, 11 events, 9 blocked, 1 allowed, 1 approval](docs/images/overview.png) | ![Tools: per-tool call/deny counts with DENY badges](docs/images/tools.png) |
+
+| Policies | Audit |
+| -------- | ----- |
+| ![Policies: rule-file layout and CLI workflow](docs/images/policies.png) | ![Audit: hash-chained POLICY_ALLOW/DENY, INJECTION_DETECTED, TAINT_PROPAGATED events](docs/images/audit.png) |
+
+| Incidents | Approvals |
+| --------- | --------- |
+| ![Incidents: PROMPT_INJECTION (HIGH) and DATA_EXFILTRATION (CRITICAL) triage](docs/images/incidents.png) | ![Approvals: live PENDING queue with Approve/Deny actions](docs/images/approvals.png) |
+
+Reproduce: `cargo run -p aegis-cli -- serve --bind 127.0.0.1:8787`, seed via
+`POST /api/inspect`, then `cd dashboard && npm ci && npm run build &&
+npm start -- --port 3000` and open `http://127.0.0.1:3000/overview`.
 
 ## Docs
 

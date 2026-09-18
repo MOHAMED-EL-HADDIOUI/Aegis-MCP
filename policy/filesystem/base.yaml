@@ -10,12 +10,12 @@ rules:
     when:
       tool: filesystem_read
       path_prefix: ./workspace
-  - name: deny-write-outside-workspace
-    action: deny
-    when:
-      tool: filesystem_write
   - name: approve-write-project
     action: require_approval
     when:
       tool: filesystem_write
       path_prefix: ./workspace
+  - name: deny-write-outside-workspace
+    action: deny
+    when:
+      tool: filesystem_write

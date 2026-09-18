@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Policy `rate` condition (`rate_rps >= threshold`): the gateway feeds the
+  observed per-session request rate (calls since first seen, 1 s floor) into
+  every evaluation; `policy test` fixtures set it via `"rate"`. Covered by
+  engine unit tests + a gateway burst test (`session_rate_condition_throttles_burst`).
+- Policy `time` condition: UTC daily window `"HH:MM-HH:MM"` (wrap-safe for
+  overnight ranges); malformed windows never match. `EvalInput::now_unix`
+  pins the clock for tests; `policy test` fixtures set it via `"now"`.
+- Fixed dead `approve-write-project` rule: the blanket
+  `deny-write-outside-workspace` used to shadow it (first-match wins), so
+  every write denied and the approval path never fired. The approval rule
+  now precedes the deny catch-all in `policy/filesystem/base.yaml` (README
+  example updated to match).
+- `path_prefix` is now boundary-aware (`./workspace` no longer matches
+  sibling `./workspace-evil/…`); pinned by `path_prefix_is_boundary_aware`.
+- Fixed the dashboard actually loading data: the REST API now answers CORS
+  preflights and stamps `Access-Control-Allow-Origin: *` (loopback
+  control-plane, no credentials), so the Next.js console on `:3000` can
+  fetch the API on `:8787`. Pinned by `rest_cors_allows_dashboard_origin`.
+
 - Approval grants: `REQUIRE_APPROVAL` mints/reuses a `PENDING` request (id in
   the block reason); approving unblocks the identical call via an expiring
   `approval-grant` verdict. Expiry enforced with lazy `sweep_expired()`;

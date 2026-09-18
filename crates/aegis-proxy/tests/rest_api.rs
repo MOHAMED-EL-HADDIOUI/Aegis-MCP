@@ -218,6 +218,45 @@ async fn rest_approval_loop_end_to_end() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rest_cors_allows_dashboard_origin() {
+    let db = db_path("cors");
+    let port = serve_on_ephemeral(&db).await;
+    wait_ready(port).await;
+    // Preflight from the dashboard origin answers with the CORS grant.
+    let (status, _) = request_with_headers(
+        port,
+        "OPTIONS",
+        "/api/events",
+        None,
+        &[
+            ("Origin", "http://127.0.0.1:3000"),
+            ("Access-Control-Request-Method", "GET"),
+        ],
+    )
+    .await;
+    assert_eq!(status, 200);
+    // Real responses carry ACAO so browser fetches from :3000 succeed.
+    let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .expect("connect");
+    stream
+        .write_all(
+            b"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://127.0.0.1:3000\r\nConnection: close\r\n\r\n",
+        )
+        .await
+        .expect("write");
+    let mut raw = String::new();
+    stream.read_to_string(&mut raw).await.expect("read");
+    let head = raw.split("\r\n\r\n").next().unwrap_or("").to_lowercase();
+    assert!(
+        head.contains("access-control-allow-origin: *"),
+        "CORS header missing, got head: {}",
+        &head[..head.len().min(400)]
+    );
+    let _ = std::fs::remove_file(db);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rest_inspect_returns_traceparent() {
     let db = db_path("trace");
     let port = serve_on_ephemeral(&db).await;

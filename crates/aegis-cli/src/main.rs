@@ -471,6 +471,11 @@ fn policy_test(policy: &str, fixture: &str, json: bool) -> anyhow::Result<()> {
             .unwrap_or_default(),
         risk_score: v.get("risk").and_then(|r| r.as_f64()).unwrap_or(0.0) as f32,
         args: v.get("args").cloned().unwrap_or_default(),
+        rate_rps: v
+            .get("rate")
+            .and_then(|r| r.as_f64().or_else(|| r.as_str()?.trim().parse().ok()))
+            .unwrap_or(0.0) as f32,
+        now_unix: v.get("now").and_then(|n| n.as_i64()),
         ..Default::default()
     };
     let outcome = engine.evaluate(&input);

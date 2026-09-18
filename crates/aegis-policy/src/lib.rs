@@ -59,6 +59,14 @@ pub struct EvalInput {
     pub risk_score: f32,
     pub resource: String,
     pub args: serde_json::Value,
+    /// Observed session request rate (requests/sec), populated by the
+    /// gateway from per-session accounting. Drives the `rate` condition.
+    /// Defaults to 0.0 (offline `policy test` fixtures can set `rate`).
+    pub rate_rps: f32,
+    /// Unix timestamp override for the `time` condition. `None` (default)
+    /// means "use the real current UTC time"; `Some` pins the clock for
+    /// deterministic tests and CLI fixtures (`"now"`).
+    pub now_unix: Option<i64>,
 }
 
 impl EvalInput {
@@ -196,12 +204,42 @@ fn cond_matches(key: &str, cond: &serde_json::Value, input: &EvalInput) -> bool 
             }
         }
         "path_prefix" => {
+            // Boundary-aware containment: "./workspace" matches the dir
+            // itself and "./workspace/…" but NOT "./workspace-evil/…"
+            // (naive starts_with would let a sibling squat the prefix).
             let prefix = cond.as_str().unwrap_or("");
-            input.path == *prefix || input.path.starts_with(prefix)
+            input.path == *prefix
+                || input.path.starts_with(&format!("{prefix}/"))
+                || (prefix.ends_with('/') && input.path.starts_with(prefix))
         }
         "risk_gte" => {
             let threshold = cond.as_f64().unwrap_or(1.0) as f32;
             input.risk_score >= threshold
+        }
+        "rate" => {
+            // Session request-rate gate: `rate: 50` ⇔ observed rps >= 50.
+            // Accepts a JSON number or a numeric string.
+            let threshold = cond
+                .as_f64()
+                .or_else(|| cond.as_str().and_then(|s| s.trim().parse::<f64>().ok()));
+            match threshold {
+                Some(t) => input.rate_rps >= t as f32,
+                None => false,
+            }
+        }
+        "time" => {
+            // UTC daily window `"HH:MM-HH:MM"` (24h clock, wrap-safe, so
+            // `"22:00-06:00"` covers overnight). Malformed values never
+            // match (fail-closed: an allow rule with a bad window denies).
+            match cond.as_str().and_then(parse_hhmm_window) {
+                Some((start, end)) => {
+                    let now = input
+                        .now_unix
+                        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                    time_in_window(now, start, end)
+                }
+                None => false,
+            }
         }
         _ => {
             if let Some(actual) = input.get(key) {
@@ -242,6 +280,42 @@ fn cond_matches(key: &str, cond: &serde_json::Value, input: &EvalInput) -> bool 
 
 fn rule_matches(rule: &Rule, input: &EvalInput) -> bool {
     rule.when.iter().all(|(k, v)| cond_matches(k, v, input))
+}
+
+/// Parse a `"HH:MM"` 24h time into seconds since midnight. Strict:
+/// exactly 5 chars, valid hour 00-23, valid minute 00-59.
+fn parse_hhmm(s: &str) -> Option<i64> {
+    let s = s.trim();
+    if s.len() != 5 || s.as_bytes()[2] != b':' {
+        return None;
+    }
+    let h: i64 = s[..2].parse().ok()?;
+    let m: i64 = s[3..].parse().ok()?;
+    if !(0..24).contains(&h) || !(0..60).contains(&m) {
+        return None;
+    }
+    Some(h * 3600 + m * 60)
+}
+
+/// Parse a `"HH:MM-HH:MM"` daily window into (start, end) seconds.
+fn parse_hhmm_window(s: &str) -> Option<(i64, i64)> {
+    let (a, b) = s.split_once('-')?;
+    Some((parse_hhmm(a)?, parse_hhmm(b)?))
+}
+
+/// True when unix timestamp `now` falls inside the daily `[start, end)`
+/// window (UTC). Wrap-safe: `start > end` means overnight (e.g.
+/// `22:00-06:00`). Zero-width windows (`start == end`) never match.
+fn time_in_window(now: i64, start: i64, end: i64) -> bool {
+    if start == end {
+        return false;
+    }
+    let tod = now.rem_euclid(86_400);
+    if start < end {
+        (start..end).contains(&tod)
+    } else {
+        tod >= start || tod < end
+    }
 }
 
 /// Bundle signing: BLAKE3 digest + ed25519 verify helper.
@@ -478,5 +552,103 @@ rules:
         // Missing file fails closed (no panic).
         assert!(Engine::load_verified("/nonexistent/aegis-bundle.json", &pk).is_err());
         let _ = std::fs::remove_file(&path);
+    }
+    #[test]
+    fn rate_threshold_matches_observed_rps() {
+        let e = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: throttle-burst, action: deny, when: {rate: 50}}\n",
+        )
+        .unwrap();
+        let hot = EvalInput {
+            rate_rps: 120.0,
+            ..Default::default()
+        };
+        assert_eq!(e.evaluate(&hot).policy, "throttle-burst");
+        let cool = EvalInput {
+            rate_rps: 2.0,
+            ..Default::default()
+        };
+        assert_eq!(e.evaluate(&cool).policy, "default-deny");
+        // Numeric strings work; garbage never matches (fail-closed).
+        let s = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: s, action: deny, when: {rate: \"50\"}}\n  - {name: g, action: deny, when: {rate: \"fast\"}}\n",
+        )
+        .unwrap();
+        assert_eq!(s.evaluate(&hot).policy, "s");
+        let g = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: g, action: allow, when: {rate: \"fast\"}}\n",
+        )
+        .unwrap();
+        assert_eq!(g.evaluate(&hot).policy, "default-deny");
+    }
+    #[test]
+    fn path_prefix_is_boundary_aware() {
+        let e = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: allow-proj, action: allow, when: {tool: filesystem_read, path_prefix: ./workspace}}\n",
+        )
+        .unwrap();
+        for ok in ["./workspace", "./workspace/src/main.rs", "./workspace/"] {
+            let i = EvalInput {
+                tool: "filesystem_read".into(),
+                path: ok.into(),
+                ..Default::default()
+            };
+            assert_eq!(e.evaluate(&i).policy, "allow-proj", "path={ok}");
+        }
+        // Sibling squat: shares the string prefix but is NOT contained.
+        for bad in ["./workspace-evil/secret", "./workspace2/x", "./workspaces"] {
+            let i = EvalInput {
+                tool: "filesystem_read".into(),
+                path: bad.into(),
+                ..Default::default()
+            };
+            assert_eq!(e.evaluate(&i).policy, "default-deny", "path={bad}");
+        }
+    }
+    #[test]
+    fn time_window_matches_pinned_clock() {
+        // 2026-01-02T10:30:00Z = 1767349800.
+        let noonish = 1_767_349_800i64;
+        let e = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: business-hours, action: allow, when: {time: \"09:00-17:00\"}}\n",
+        )
+        .unwrap();
+        let inside = EvalInput {
+            now_unix: Some(noonish),
+            ..Default::default()
+        };
+        assert_eq!(e.evaluate(&inside).policy, "business-hours");
+        // 03:00Z same day is outside 09:00-17:00.
+        let outside = EvalInput {
+            now_unix: Some(noonish - 27_000),
+            ..Default::default()
+        };
+        assert_eq!(e.evaluate(&outside).policy, "default-deny");
+        // Overnight window wraps: 23:00Z matches 22:00-06:00.
+        let night = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: night-window, action: allow, when: {time: \"22:00-06:00\"}}\n",
+        )
+        .unwrap();
+        let at_23 = EvalInput {
+            now_unix: Some(1_767_394_800), // 2026-01-02T23:00:00Z
+            ..Default::default()
+        };
+        assert_eq!(night.evaluate(&at_23).policy, "night-window");
+        assert_eq!(night.evaluate(&inside).policy, "default-deny");
+        // Malformed windows never match, even on allow rules.
+        for bad in [
+            "9-17",
+            "09:00",
+            "25:00-26:00",
+            "09:60-10:00",
+            "10:00-10:00",
+            "nope",
+        ] {
+            let b = Engine::load_yaml_str(&format!(
+                "version: \"1\"\nrules:\n  - {{name: b, action: allow, when: {{time: \"{bad}\"}}}}\n"
+            ))
+            .unwrap();
+            assert_eq!(b.evaluate(&inside).policy, "default-deny", "bad={bad}");
+        }
     }
 }

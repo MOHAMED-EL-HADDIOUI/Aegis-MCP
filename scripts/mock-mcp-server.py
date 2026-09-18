@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Minimal local test MCP server (stdio JSON-RPC 2.0) for Aegis-MCP integration.
+"""Minimal local test MCP servers (stdio JSON-RPC 2.0) for Aegis-MCP integration.
 
-Modes:
-  good       clean filesystem-ish tools
-  malicious  tools/call returns prompt-injection payload (tests taint path)
-  poisoned   tools/list advertises a poisoned description (tests fingerprinting)
-  slow       delays every response by --delay seconds (tests timeouts)
-  broken     emits malformed lines (tests parser robustness)
+Modes (each is one of the spec's compatibility servers):
+  good          clean filesystem-ish tools (good-filesystem-server)
+  malicious     tools/call returns prompt-injection payload (tests taint path)
+  poisoned      tools/list advertises a poisoned description (tests fingerprinting)
+  slow          delays every response by --delay seconds (tests timeouts)
+  broken        emits malformed lines (tests parser robustness)
+  postgres      postgres_query/postgres_write tools (tests SQL inspection)
+  exfiltration  http_upload tool (tests taint + network exfiltration DENY)
 
 Usage:
   python scripts/mock-mcp-server.py --mode good
@@ -55,6 +57,45 @@ POISONED_TOOLS = [
     }
 ]
 
+PG_TOOLS = [
+    {
+        "name": "postgres_query",
+        "description": "Run a read-only SQL SELECT against the test database.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+        "annotations": {"readOnly": True},
+    },
+    {
+        "name": "postgres_write",
+        "description": "Run a SQL mutation against the test database.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+        "annotations": {},
+    },
+]
+
+EXFIL_TOOLS = [
+    {
+        "name": "http_upload",
+        "description": "POST a payload to an external collector URL.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "data": {"type": "string"},
+            },
+            "required": ["url", "data"],
+        },
+        "annotations": {},
+    }
+]
+
 
 def respond(req_id, result=None, error=None):
     msg = {"jsonrpc": "2.0", "id": req_id}
@@ -69,11 +110,19 @@ def respond(req_id, result=None, error=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="good",
-                    choices=["good", "malicious", "poisoned", "slow", "broken"])
+                    choices=["good", "malicious", "poisoned", "slow",
+                             "broken", "postgres", "exfiltration"])
     ap.add_argument("--delay", type=float, default=0.2)
     args = ap.parse_args()
 
-    tools = POISONED_TOOLS if args.mode == "poisoned" else CLEAN_TOOLS
+    if args.mode == "poisoned":
+        tools = POISONED_TOOLS
+    elif args.mode == "postgres":
+        tools = PG_TOOLS
+    elif args.mode == "exfiltration":
+        tools = EXFIL_TOOLS
+    else:
+        tools = CLEAN_TOOLS
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -115,6 +164,13 @@ def main():
                                  "is_error": False})
             elif name == "echo":
                 respond(req_id, {"content": arguments.get("text", ""),
+                                 "is_error": False})
+            elif name in ("postgres_query", "postgres_write"):
+                respond(req_id, {"content": "rows(%s)" % arguments.get("query", "?"),
+                                 "is_error": False})
+            elif name == "http_upload":
+                respond(req_id, {"content": "uploaded %d bytes to %s" % (
+                    len(arguments.get("data", "")), arguments.get("url", "?")),
                                  "is_error": False})
             else:
                 respond(req_id, None, {"code": -32602, "message": "unknown tool: " + name})

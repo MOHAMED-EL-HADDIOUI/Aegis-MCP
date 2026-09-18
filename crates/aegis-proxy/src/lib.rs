@@ -141,6 +141,9 @@ pub struct Gateway {
     pub classifier_provider: String,
     pub classifier_model: Option<String>,
     pub rate_limiter: Mutex<RateLimiter>,
+    /// Per-session (calls, first-seen) counters backing the observed
+    /// request rate fed to the policy engine's `rate` condition.
+    pub session_stats: Mutex<HashMap<String, (u64, Instant)>>,
 }
 
 /// Token-bucket rate limiter, keyed per session (or server).
@@ -267,6 +270,7 @@ impl Gateway {
             classifier_provider: "heuristic".into(),
             classifier_model: None,
             rate_limiter,
+            session_stats: Mutex::new(HashMap::new()),
         }))
     }
 
@@ -288,6 +292,7 @@ impl Gateway {
             classifier_provider: "heuristic".into(),
             classifier_model: None,
             rate_limiter,
+            session_stats: Mutex::new(HashMap::new()),
         }))
     }
 
@@ -312,6 +317,7 @@ impl Gateway {
             obs,
             classifier_provider: "heuristic".into(),
             classifier_model: None,
+            session_stats: Mutex::new(HashMap::new()),
         })
     }
 
@@ -324,6 +330,17 @@ impl Gateway {
         args: &serde_json::Value,
     ) -> (aegis_core::FinalVerdict, f32) {
         let start = Instant::now();
+        // Observed session request rate for the policy `rate` condition:
+        // calls since first seen over an elapsed window floored at 1 s, so
+        // a lone first request reports ~1 rps instead of spiking.
+        let session_rps = {
+            let mut stats = self.session_stats.lock().unwrap();
+            let now = Instant::now();
+            let entry = stats.entry(session.to_string()).or_insert((0, now));
+            entry.0 += 1;
+            let elapsed = now.duration_since(entry.1).as_secs_f64().max(1.0);
+            entry.0 as f64 / elapsed
+        } as f32;
         let request_hash = blake3::hash(canonical_json(args).as_bytes())
             .to_hex()
             .to_string()[..16]
@@ -438,6 +455,7 @@ impl Gateway {
             taints: taint_names.clone(),
             risk_score: det_risk,
             args: args.clone(),
+            rate_rps: session_rps,
             ..Default::default()
         };
         let outcome = self.policy.evaluate(&input);
@@ -1055,9 +1073,49 @@ pub async fn serve_rest_api(
         .route("/api/approvals", get(api_approvals))
         .route("/api/approvals/:id", post(api_approval_action))
         .route("/api/inspect", post(api_inspect_call))
+        .layer(axum::middleware::from_fn(cors_middleware))
         .with_state(state);
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// CORS for the local dashboard: the Next.js console is served from a
+/// different origin (`:3000` vs the API's `:8787`), so browsers block its
+/// fetches without these headers. Deliberately open (`*`, no credentials —
+/// the API never uses cookies/auth headers) because this is a loopback
+/// control-plane API, not a multi-tenant service.
+async fn cors_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::{header, HeaderValue};
+    use axum::response::IntoResponse;
+    if req.method() == axum::http::Method::OPTIONS {
+        let mut head = axum::http::HeaderMap::new();
+        head.insert(
+            header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            HeaderValue::from_static("*"),
+        );
+        head.insert(
+            header::ACCESS_CONTROL_ALLOW_METHODS,
+            HeaderValue::from_static("GET, POST, OPTIONS"),
+        );
+        head.insert(
+            header::ACCESS_CONTROL_ALLOW_HEADERS,
+            HeaderValue::from_static("content-type, traceparent"),
+        );
+        head.insert(
+            header::ACCESS_CONTROL_MAX_AGE,
+            HeaderValue::from_static("86400"),
+        );
+        return (head, axum::body::Body::empty()).into_response();
+    }
+    let mut res = next.run(req).await;
+    res.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    res
 }
 
 #[cfg(test)]
@@ -1082,6 +1140,7 @@ mod tests {
             classifier_provider: "heuristic".into(),
             classifier_model: None,
             rate_limiter: Mutex::new(RateLimiter::disabled()),
+            session_stats: Mutex::new(HashMap::new()),
         })
     }
     #[test]
@@ -1164,6 +1223,7 @@ mod tests {
             classifier_provider: "heuristic".into(),
             classifier_model: None,
             rate_limiter: Mutex::new(RateLimiter::disabled()),
+            session_stats: Mutex::new(HashMap::new()),
         });
         let args = serde_json::json!({"op": "write"});
         let (v1, _) = gw.inspect_tool_call("s", "srv", "guarded", &args).await;
@@ -1186,6 +1246,44 @@ mod tests {
             .inspect_tool_call("s", "srv", "guarded", &serde_json::json!({"op": "other"}))
             .await;
         assert_eq!(v3.decision, Decision::RequireApproval);
+    }
+    #[tokio::test]
+    async fn session_rate_condition_throttles_burst() {
+        // `rate: 6` denies once the session-average rate reaches 6 rps.
+        // Sub-second bursts divide by the 1 s floor, so call N reports N rps.
+        let mut cfg = Config::default();
+        cfg.audit.database = ":memory:".into();
+        let policy = Engine::load_yaml_str(
+            "version: \"1\"\nrules:\n  - {name: throttle-burst, action: deny, when: {tool: ping, rate: 6}}\n  - {name: ok, action: allow, when: {tool: ping}}\n",
+        )
+        .unwrap();
+        let audit = aegis_audit::AuditLog::open_in_memory().unwrap();
+        let obs = Observability::init().unwrap();
+        let gw = Arc::new(Gateway {
+            config: cfg,
+            policy,
+            registry: Mutex::new(ToolRegistry::new()),
+            taint: Mutex::new(TaintStore::new()),
+            audit,
+            obs,
+            classifier_provider: "heuristic".into(),
+            classifier_model: None,
+            rate_limiter: Mutex::new(RateLimiter::disabled()),
+            session_stats: Mutex::new(HashMap::new()),
+        });
+        let args = serde_json::json!({});
+        let (first, _) = gw.inspect_tool_call("burst", "srv", "ping", &args).await;
+        assert_eq!(first.decision, Decision::Allow);
+        let mut last = first;
+        for _ in 0..6 {
+            let (v, _) = gw.inspect_tool_call("burst", "srv", "ping", &args).await;
+            last = v;
+        }
+        assert_eq!(last.decision, Decision::Deny);
+        assert_eq!(last.policy, "throttle-burst");
+        // A different session is unaffected (per-session accounting).
+        let (fresh, _) = gw.inspect_tool_call("quiet", "srv", "ping", &args).await;
+        assert_eq!(fresh.decision, Decision::Allow);
     }
     #[tokio::test]
     async fn taint_events_emitted_and_metered() {
